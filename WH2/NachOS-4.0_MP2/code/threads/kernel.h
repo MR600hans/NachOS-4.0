@@ -27,11 +27,24 @@ class SynchDisk;
 
 typedef int OpenFileId;
 
+class UsedPhyPage {
+public:
+    UsedPhyPage();
+    ~UsedPhyPage();
+    int *pages; /* 0 for unused, 1 for used */
+    int numUnused();
+    int checkAndSet();
+};
+
+
+
 class Kernel {
   public:
     Kernel(int argc, char **argv);
     				// Interpret command line arguments
     ~Kernel();		        // deallocate the kernel
+
+    bool PhyPage [NumPhysPages];
     
     void Initialize(); 		// initialize the kernel -- separated
 				// from constructor because 
