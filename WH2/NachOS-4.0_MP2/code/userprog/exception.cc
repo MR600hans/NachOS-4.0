@@ -194,10 +194,9 @@ void ExceptionHandler(ExceptionType which) {
           break;
       }
       break;
-    case NumExceptionTypes:
-      
     default:
       cerr << "Unexpected user mode exception " << (int)which << "\n";
+      ASSERTNOTREACHED();
       break;
   }
   ASSERTNOTREACHED();

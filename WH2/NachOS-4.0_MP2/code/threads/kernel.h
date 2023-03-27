@@ -36,15 +36,11 @@ public:
     int checkAndSet();
 };
 
-
-
 class Kernel {
   public:
     Kernel(int argc, char **argv);
     				// Interpret command line arguments
     ~Kernel();		        // deallocate the kernel
-
-    bool PhyPage [NumPhysPages];
     
     void Initialize(); 		// initialize the kernel -- separated
 				// from constructor because 
@@ -81,6 +77,7 @@ class Kernel {
     FileSystem *fileSystem;     
     PostOfficeInput *postOfficeIn;
     PostOfficeOutput *postOfficeOut;
+    UsedPhyPage* usedPhyPage;
 
     int hostName;               // machine identifier
 

@@ -93,9 +93,7 @@ Kernel::Initialize()
     // We didn't explicitly allocate the current thread we are running in.
     // But if it ever tries to give up the CPU, we better have a Thread
     // object to save its state. 
-    for (int i = 0; i < NumPhysPages; i ++) {
-        PhyPage[i] = false;
-    }
+
 	
     currentThread = new Thread("main", threadNum++);		
     currentThread->setStatus(RUNNING);
@@ -116,6 +114,7 @@ Kernel::Initialize()
     postOfficeIn = new PostOfficeInput(10);
     postOfficeOut = new PostOfficeOutput(reliability);
 
+    usedPhyPage = new UsedPhyPage();
     interrupt->Enable();
 }
 
@@ -304,8 +303,6 @@ int Kernel::Exec(char* name)
 //    Kernel::Run();
 //  cout << "after ThreadedKernel:Run();" << endl;  // unreachable
 }
-
-
 UsedPhyPage::UsedPhyPage()
 {
     pages = new int[NumPhysPages];
@@ -322,7 +319,9 @@ int UsedPhyPage::numUnused()
     int count = 0;
 
     for(int i = 0; i < NumPhysPages; i++) {
-        if(pages[i] == 0) count++;
+        if(pages[i] == 0){
+            count++;
+        } 
     }
     return count;
 }  
@@ -332,7 +331,7 @@ int UsedPhyPage::checkAndSet()
 {
     int unUsedPage = -1;
 
-    for(int i = 90; i < NumPhysPages; i--) {
+    for(int i = 0; i < NumPhysPages; i++) {
         if(pages[i] == 0) {
             unUsedPage = i;
             break;

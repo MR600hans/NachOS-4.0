@@ -89,9 +89,6 @@ AddrSpace::AddrSpace()
 AddrSpace::~AddrSpace()
 {
    delete []pageTable;
-   for (int i = 0; i < numPages; i ++) {
-    kernel->PhyPage[pageTable[i].physicalPage] = false;
-   }
 }
 
 
@@ -136,20 +133,13 @@ AddrSpace::Load(char *fileName)
 						// to leave room for the stack
 #endif
     numPages = divRoundUp(size, PageSize);
-    size = numPages * PageSize;
+    ASSERT(numPages < kernel->usedPhyPage->numUnused());
 
-        /* set up page table after we know how much address space the program needs*/
+    /* set up page table after we know how much address space the program needs*/
     pageTable = new TranslationEntry[numPages];
-    cout << "new TranslationEntry" << endl;
-
     for (int i = 0; i < numPages; i++) {
         pageTable[i].virtualPage = i;	
-        unsigned int j = 0;
-        while(j < NumPhysPages && kernel->PhyPage[j] == true) {
-            j += 1;
-        }
-        kernel->PhyPage[j] =true;
-        pageTable[i].physicalPage = j;
+        pageTable[i].physicalPage = kernel->usedPhyPage->checkAndSet();
         pageTable[i].valid = true;
         pageTable[i].use = false;
         pageTable[i].dirty = false;
@@ -158,13 +148,6 @@ AddrSpace::Load(char *fileName)
         ASSERT(pageTable[i].physicalPage != -1); 
         bzero(kernel->machine->mainMemory + pageTable[i].physicalPage * PageSize, PageSize);
     }
-    cout << "end TranslationEntry" << endl;
-
-    ASSERT(numPages <= NumPhysPages);		// check we're not trying
-						// to run anything too big --
-						// at least until we have
-						// virtual memory
-
     // size = numPages * PageSize;
 
     // ASSERT(numPages <= NumPhysPages);		// check we're not trying
@@ -174,15 +157,13 @@ AddrSpace::Load(char *fileName)
 
     DEBUG(dbgAddr, "Initializing address space: " << numPages << ", " << size);
 
-    unsigned int virtualAddr = noffH.code.virtualAddr;
+unsigned int virtualAddr = noffH.code.virtualAddr;
     unsigned int physicalAddr;
 
     int unReadSize;
     int chunkStart;
     int chunkSize;
-    int inFilePosition;
-
-    cout << "noffH.code.size: " << noffH.code.size << endl;
+    int inFileposition;
     if (noffH.code.size > 0) {
         DEBUG(dbgAddr, "Initializing code segment.");
 	    DEBUG(dbgAddr, noffH.code.virtualAddr << ", " << noffH.code.size);
@@ -190,35 +171,22 @@ AddrSpace::Load(char *fileName)
         unReadSize = noffH.code.size;
         chunkStart = noffH.code.virtualAddr;
         chunkSize = 0;
-        inFilePosition = 0;
+        inFileposition = 0;
 
         /* while still unread code */
         while(unReadSize > 0) {
-            cout << "unReadSize: " << unReadSize << endl;
             
             /* first chunk and last chunk might not be full */
             chunkSize =  calChunkSize(chunkStart, unReadSize); 
             Translate(chunkStart, &physicalAddr, 1);
-            executable->ReadAt(&(kernel->machine->mainMemory[physicalAddr]), chunkSize, noffH.code.inFileAddr + inFilePosition);
-
+            executable->ReadAt(&(kernel->machine->mainMemory[physicalAddr]), chunkSize, noffH.code.inFileAddr + inFileposition);
             unReadSize = unReadSize - chunkSize;
             chunkStart = chunkStart + chunkSize;
-            inFilePosition = inFilePosition + chunkSize;
+            inFileposition = inFileposition + chunkSize;
         }
-        cout << "if1" << endl;
+
         // executable->ReadAt(&(kernel->machine->mainMemory[noffH.code.virtualAddr]), noffH.code.size, noffH.code.inFileAddr);
     }
-
-// then, copy in the code and data segments into memory
-// Note: this code assumes that virtual address = physical address
-    // if (noffH.code.size > 0) {
-    //     DEBUG(dbgAddr, "Initializing code segment.");
-	// DEBUG(dbgAddr, noffH.code.virtualAddr << ", " << noffH.code.size);
-    //     executable->ReadAt(
-	// 	&(kernel->machine->mainMemory[(pageTable[noffH.code.virtualAddr/PageSize].physicalPage)*PageSize + noffH.code.virtualAddr%PageSize]), 
-	// 		noffH.code.size, noffH.code.inFileAddr);
-    // }
-    cout << "noffH.initData.size: " << noffH.initData.size << endl;
     if (noffH.initData.size > 0) {
         DEBUG(dbgAddr, "Initializing data segment.");
 	    DEBUG(dbgAddr, noffH.initData.virtualAddr << ", " << noffH.initData.size);
@@ -226,24 +194,22 @@ AddrSpace::Load(char *fileName)
         unReadSize = noffH.initData.size;
         chunkStart = noffH.initData.virtualAddr;
         chunkSize = 0;
-        inFilePosition = 0;
+        inFileposition = 0;
 
         /* while still unread code */
         while(unReadSize > 0) {
             /* first chunk and last chunk might not be full */
             chunkSize =  calChunkSize(chunkStart, unReadSize); 
             Translate(chunkStart, &physicalAddr, 1);
-            executable->ReadAt(&(kernel->machine->mainMemory[physicalAddr]), chunkSize, noffH.initData.inFileAddr + inFilePosition);
-
+            executable->ReadAt(&(kernel->machine->mainMemory[physicalAddr]), chunkSize, noffH.initData.inFileAddr + inFileposition);
             unReadSize = unReadSize - chunkSize;
             chunkStart = chunkStart + chunkSize;
-            inFilePosition = inFilePosition + chunkSize;
+            inFileposition = inFileposition + chunkSize;
         }
 
         // executable->ReadAt(&(kernel->machine->mainMemory[noffH.initData.virtualAddr]), noffH.initData.size, noffH.initData.inFileAddr);
-        cout << "if2" << endl;
     }
-    cout << "noffH.readonlyData.size: " << noffH.readonlyData.size << endl;
+
 #ifdef RDATA
     if (noffH.readonlyData.size > 0) {
         DEBUG(dbgAddr, "Initializing read only data segment.");
@@ -253,25 +219,24 @@ AddrSpace::Load(char *fileName)
         unReadSize = noffH.readonlyData.size;
         chunkStart = noffH.readonlyData.virtualAddr;
         chunkSize = 0;
-        inFilePosition = 0;
+        inFileposition = 0;
 
         /* while still unread code */
         while(unReadSize > 0) {
             /* first chunk and last chunk might not be full */
             chunkSize =  calChunkSize(chunkStart, unReadSize); 
             Translate(chunkStart, &physicalAddr, 1);
-            executable->ReadAt(&(kernel->machine->mainMemory[physicalAddr]), chunkSize, noffH.readonlyData.inFileAddr + inFilePosition);
+            executable->ReadAt(&(kernel->machine->mainMemory[physicalAddr]), chunkSize, noffH.readonlyData.inFileAddr + inFileposition);
 
             unReadSize = unReadSize - chunkSize;
             chunkStart = chunkStart + chunkSize;
-            inFilePosition = inFilePosition + chunkSize;
+            inFileposition = inFileposition + chunkSize;
         }
 
         // executable->ReadAt(&(kernel->machine->mainMemory[noffH.readonlyData.virtualAddr]), noffH.readonlyData.size, noffH.readonlyData.inFileAddr);
-        cout << "if3" << endl;
     }
 #endif
-    cout << "delete executable" << endl;
+
     delete executable;			// close file
     return TRUE;			// success
 }
@@ -413,7 +378,6 @@ AddrSpace::Translate(unsigned int vaddr, unsigned int *paddr, int isReadWrite)
 
     return NoException;
 }
-
 
 int AddrSpace::calChunkSize(int chunkStart, int unReadSize)
 {
